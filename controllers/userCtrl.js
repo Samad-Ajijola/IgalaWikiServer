@@ -36,7 +36,9 @@ const userCtrl = {
       } else {
         return res.status(400).json({ msg: "User Not Registered" });
       }
-    } catch (error) {}
+    } catch (error) {
+        return res.status(500).json({msg: error.message})
+    }
   },
 };
     module.exports = userCtrl
