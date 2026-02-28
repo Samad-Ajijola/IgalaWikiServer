@@ -36,7 +36,7 @@ const eventCtrl = {
     }
   },
 
-  create: async (req, res) => {
+  createEvent: async (req, res) => {
     const { name, description, imageSrc, galleryImages } = req.body
     if (!name) {
       return res.status(400).json({ error: 'name is required' })
