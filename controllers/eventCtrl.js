@@ -1,4 +1,14 @@
 const Event = require('../models/event')
+const mongoose = require('mongoose')
+
+function parseEventId(paramId) {
+  const num = Number(paramId)
+  if (!Number.isNaN(num) && Number.isInteger(num)) return { id: num }
+  if (mongoose.Types.ObjectId.isValid(paramId) && String(paramId).length === 24) {
+    return { _id: new mongoose.Types.ObjectId(paramId) }
+  }
+  return null
+}
 
 const eventCtrl = {
   getAll: async (req, res) => {
@@ -12,9 +22,12 @@ const eventCtrl = {
   },
 
   getById: async (req, res) => {
-    const id = Number(req.params.id)
+    const filter = parseEventId(req.params.id)
+    if (!filter) {
+      return res.status(400).json({ error: 'Invalid event id' })
+    }
     try {
-      const event = await Event.findOne({ id }).lean()
+      const event = await Event.findOne(filter).lean()
       if (!event) return res.status(404).json({ error: 'Event not found' })
       res.json(event)
     } catch (err) {
@@ -44,10 +57,13 @@ const eventCtrl = {
   },
 
   update: async (req, res) => {
-    const id = Number(req.params.id)
+    const filter = parseEventId(req.params.id)
+    if (!filter) {
+      return res.status(400).json({ error: 'Invalid event id' })
+    }
     const { name, description, imageSrc, galleryImages } = req.body
     try {
-      const existing = await Event.findOne({ id })
+      const existing = await Event.findOne(filter)
       if (!existing) return res.status(404).json({ error: 'Event not found' })
 
       if (name !== undefined) existing.name = name
@@ -66,9 +82,12 @@ const eventCtrl = {
   },
 
   delete: async (req, res) => {
-    const id = Number(req.params.id)
+    const filter = parseEventId(req.params.id)
+    if (!filter) {
+      return res.status(400).json({ error: 'Invalid event id' })
+    }
     try {
-      const result = await Event.deleteOne({ id })
+      const result = await Event.deleteOne(filter)
       if (result.deletedCount === 0) {
         return res.status(404).json({ error: 'Event not found' })
       }
