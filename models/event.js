@@ -3,7 +3,6 @@ const { Schema } = mongoose
 
 const eventSchema = new Schema(
   {
-    id: { type: Number, required: true, unique: true },
     name: { type: String, required: true },
     description: { type: String, default: '' },
     imageSrc: { type: String, default: '' },
@@ -12,5 +11,7 @@ const eventSchema = new Schema(
   },
   { timestamps: true },
 )
+
+eventSchema.index({ createdAt: -1 })
 
 module.exports = mongoose.model('Event', eventSchema)
