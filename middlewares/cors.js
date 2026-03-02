@@ -2,7 +2,8 @@ const cors = require('cors');
 
 const allowedOrigins = [
   "http://localhost:5173",
-  "https://igala-wikimedia.vercel.app"
+  "https://igala-wikimedia.vercel.app",
+  "https://igalawikimedia.com"
 ];
 
 const corsOptions = {
