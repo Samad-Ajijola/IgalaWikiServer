@@ -1,120 +1,158 @@
 const Event = require("../models/event");
 const mongoose = require("mongoose");
 
-function parseEventId(paramId) {
-  const num = Number(paramId);
-  if (!Number.isNaN(num) && Number.isInteger(num)) return { id: num };
-  if (
-    mongoose.Types.ObjectId.isValid(paramId) &&
-    String(paramId).length === 24
-  ) {
-    return { _id: new mongoose.Types.ObjectId(paramId) };
-  }
-  return null;
+/* ----------------------------------------
+   Helper: Validate Mongo ObjectId
+----------------------------------------- */
+function isValidObjectId(id) {
+  return mongoose.Types.ObjectId.isValid(id) && id.length === 24;
 }
 
 const eventCtrl = {
-  // getAll: async (req, res) => {
-  //   try {
-  //     const events = await Event.find().sort({ createdAt: -1 }).lean()
-  //     res.json(events)
-  //   } catch (err) {
-  //     console.error('Failed to fetch events', err)
-  //     res.status(500).json({ error: 'Failed to fetch events' })
-  //   } 
-  // },
-
+  /* ----------------------------------------
+     Get All Events (Paginated)
+  ----------------------------------------- */
   getAll: async (req, res) => {
     try {
-      const page = parseInt(req.query.page) || 1;
-      const limit = parseInt(req.query.limit) || 10;
+      const page = Math.max(parseInt(req.query.page) || 1, 1);
+      const limit = Math.min(parseInt(req.query.limit) || 10, 50); // max 50
       const skip = (page - 1) * limit;
 
-      const events = await Event.find()
-        .sort({ createdAt: -1 })
-        .skip(skip)
-        .limit(limit)
-        .lean();
+      const [events, total] = await Promise.all([
+        Event.find()
+          .sort({ createdAt: -1 })
+          .skip(skip)
+          .limit(limit)
+          .lean(),
+        Event.countDocuments(),
+      ]);
 
-      res.json(events);
+      res.json({
+        data: events,
+        pagination: {
+          page,
+          limit,
+          total,
+          totalPages: Math.ceil(total / limit),
+        },
+      });
     } catch (err) {
+      console.error("Failed to fetch events:", err);
       res.status(500).json({ error: "Failed to fetch events" });
     }
   },
 
+  /* ----------------------------------------
+     Get Single Event
+  ----------------------------------------- */
   getById: async (req, res) => {
-    const filter = parseEventId(req.params.id);
-    if (!filter) {
+    const { id } = req.params;
+
+    if (!isValidObjectId(id)) {
       return res.status(400).json({ error: "Invalid event id" });
     }
+
     try {
-      const event = await Event.findOne(filter).lean();
-      if (!event) return res.status(404).json({ error: "Event not found" });
+      const event = await Event.findById(id).lean();
+
+      if (!event) {
+        return res.status(404).json({ error: "Event not found" });
+      }
+
       res.json(event);
     } catch (err) {
-      console.error("Failed to fetch event", err);
+      console.error("Failed to fetch event:", err);
       res.status(500).json({ error: "Failed to fetch event" });
     }
   },
 
+  /* ----------------------------------------
+     Create Event
+  ----------------------------------------- */
   createEvent: async (req, res) => {
     const { name, description, imageSrc, galleryImages } = req.body;
-    if (!name) {
-      return res.status(400).json({ error: "name is required" });
+
+    if (!name || typeof name !== "string") {
+      return res.status(400).json({ error: "Name is required" });
     }
+
     try {
       const event = await Event.create({
-        id: Date.now(),
-        name,
-        description: description || "",
+        name: name.trim(),
+        description: description?.trim() || "",
         imageSrc: imageSrc || "",
-        galleryImages: Array.isArray(galleryImages) ? galleryImages : [],
+        galleryImages: Array.isArray(galleryImages)
+          ? galleryImages
+          : [],
       });
+
       res.status(201).json(event);
     } catch (err) {
-      console.error("Failed to create event", err);
+      console.error("Failed to create event:", err);
       res.status(500).json({ error: "Failed to create event" });
     }
   },
 
+  /* ----------------------------------------
+     Update Event
+  ----------------------------------------- */
   update: async (req, res) => {
-    const filter = parseEventId(req.params.id);
-    if (!filter) {
+    const { id } = req.params;
+
+    if (!isValidObjectId(id)) {
       return res.status(400).json({ error: "Invalid event id" });
     }
-    const { name, description, imageSrc, galleryImages } = req.body;
-    try {
-      const existing = await Event.findOne(filter);
-      if (!existing) return res.status(404).json({ error: "Event not found" });
 
-      if (name !== undefined) existing.name = name;
-      if (description !== undefined) existing.description = description;
-      if (imageSrc !== undefined) existing.imageSrc = imageSrc;
-      if (galleryImages !== undefined && Array.isArray(galleryImages)) {
-        existing.galleryImages = galleryImages;
+    const updates = {};
+    const { name, description, imageSrc, galleryImages } = req.body;
+
+    if (name !== undefined) updates.name = name.trim();
+    if (description !== undefined) updates.description = description.trim();
+    if (imageSrc !== undefined) updates.imageSrc = imageSrc;
+    if (galleryImages !== undefined) {
+      updates.galleryImages = Array.isArray(galleryImages)
+        ? galleryImages
+        : [];
+    }
+
+    try {
+      const updated = await Event.findByIdAndUpdate(
+        id,
+        { $set: updates },
+        { new: true, runValidators: true }
+      );
+
+      if (!updated) {
+        return res.status(404).json({ error: "Event not found" });
       }
 
-      const updated = await existing.save();
       res.json(updated);
     } catch (err) {
-      console.error("Failed to update event", err);
+      console.error("Failed to update event:", err);
       res.status(500).json({ error: "Failed to update event" });
     }
   },
 
+  /* ----------------------------------------
+     Delete Event
+  ----------------------------------------- */
   delete: async (req, res) => {
-    const filter = parseEventId(req.params.id);
-    if (!filter) {
+    const { id } = req.params;
+
+    if (!isValidObjectId(id)) {
       return res.status(400).json({ error: "Invalid event id" });
     }
+
     try {
-      const result = await Event.deleteOne(filter);
-      if (result.deletedCount === 0) {
+      const deleted = await Event.findByIdAndDelete(id);
+
+      if (!deleted) {
         return res.status(404).json({ error: "Event not found" });
       }
+
       res.status(204).send();
     } catch (err) {
-      console.error("Failed to delete event", err);
+      console.error("Failed to delete event:", err);
       res.status(500).json({ error: "Failed to delete event" });
     }
   },
